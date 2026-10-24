@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Neon Snake 🐍</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0a0a12;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    font-family: 'Courier New', monospace;
+    color: #0ff;
+    overflow: hidden;
+  }
+  h1 {
+    font-size: 2.5rem;
+    text-shadow: 0 0 10px #0ff, 0 0 20px #0ff, 0 0 40px #0ff;
+    margin-bottom: 10px;
+    letter-spacing: 3px;
+  }
+  .score {
+    font-size: 1.4rem;
+    margin-bottom: 15px;
+    text-shadow: 0 0 8px #0ff;
+  }
+  #gameCanvas {
+    border: 3px solid #0ff;
+    box-shadow: 0 0 20px #0ff, inset 0 0 20px rgba(0,255,255,0.2);
+    background: #111122;
+    border-radius: 8px;
+  }
+  .controls {
+    margin-top: 15px;
+    text-align: center;
+    font-size: 0.9rem;
+    opacity: 0.8;
+  }
+  .game-over {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(10,10,18,0.9);
+    padding: 30px 50px;
+    border: 2px solid #f0f;
+    border-radius: 12px;
+    box-shadow: 0 0 30px #f0f;
+    text-align: center;
+    display: none;
+  }
+  .game-over h2 {
+    color: #f0f;
+    text-shadow: 0 0 15px #f0f;
+    margin-bottom: 15px;
+  }
+  button {
+    background: transparent;
+    border: 2px solid #0ff;
+    color: #0ff;
+    padding: 10px 25px;
+    font-family: inherit;
+    font-size: 1.1rem;
+    cursor: pointer;
+    border-radius: 6px;
+    margin-top: 10px;
+    text-shadow: 0 0 5px #0ff;
+    transition: all 0.2s;
+  }
+  button:hover {
+    background: #0ff;
+    color: #000;
+    box-shadow: 0 0 20px #0ff;
+  }
+</style>
+</head>
+<body>
+  <h1>NEON SNAKE</h1>
+  <div class="score">Score: <span id="score">0</span> | High: <span id="high">0</span></div>
+  <canvas id="gameCanvas" width="400" height="400"></canvas>
+  <div class="controls">Arrow Keys or WASD to move • Don't hit walls or yourself!</div>
+
+  <div class="game-over" id="gameOver">
+    <h2>GAME OVER</h2>
+    <p>Final Score: <span id="finalScore">0</span></p>
+    <button onclick="restartGame()">Play Again</button>
+  </div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const scoreEl = document.getElementById('score');
+const highEl = document.getElementById('high');
+const gameOverEl = document.getElementById('gameOver');
+const finalScoreEl = document.getElementById('finalScore');
+
+const gridSize = 20;
+const tileCount = canvas.width / gridSize;
+
+let snake = [{x: 10, y: 10}];
+let food = {x: 15, y: 15};
+let dx = 0, dy = 0;
+let score = 0;
+let highScore = localStorage.getItem('neonSnakeHigh') || 0;
+let gameLoop;
+let gameRunning = true;
+
+highEl.textContent = highScore;
+
+function randomFood() {
+  food.x = Math.floor(Math.random() * tileCount);
+  food.y = Math.floor(Math.random() * tileCount);
+  for (let segment of snake) {
+    if (segment.x === food.x && segment.y === food.y) randomFood();
+  }
+}
+
+function draw() {
+  ctx.fillStyle = '#111122';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.strokeStyle = 'rgba(0,255,255,0.1)';
+  ctx.lineWidth = 0.5;
+  for (let i = 0; i <= tileCount; i++) {
+    ctx.beginPath();
+    ctx.moveTo(i * gridSize, 0);
+    ctx.lineTo(i * gridSize, canvas.height);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(0, i * gridSize);
+    ctx.lineTo(canvas.width, i * gridSize);
+    ctx.stroke();
+  }
+
+  snake.forEach((segment, index) => {
+    const hue = (index * 10 + Date.now() / 20) % 360;
+    ctx.fillStyle = `hsl(${hue}, 100%, 60%)`;
+    ctx.shadowColor = `hsl(${hue}, 100%, 60%)`;
+    ctx.shadowBlur = 15;
+    ctx.fillRect(segment.x * gridSize + 1, segment.y * gridSize + 1, gridSize - 2, gridSize - 2);
+  });
+  ctx.shadowBlur = 0;
+
+  ctx.fillStyle = '#ff00ff';
+  ctx.shadowColor = '#ff00ff';
+  ctx.shadowBlur = 20;
+  ctx.beginPath();
+  ctx.arc(food.x * gridSize + gridSize/2, food.y * gridSize + gridSize/2, gridSize/2 - 2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+}
+
+function move() {
+  if (!gameRunning) return;
+
+  const head = {x: snake[0].x + dx, y: snake[0].y + dy};
+
+  if (head.x < 0 || head.x >= tileCount || head.y < 0 || head.y >= tileCount) {
+    gameOver();
+    return;
+  }
+
+  for (let segment of snake) {
+    if (head.x === segment.x && head.y === segment.y) {
+      gameOver();
+      return;
+    }
+  }
+
+  snake.unshift(head);
+
+  if (head.x === food.x && head.y === food.y) {
+    score += 10;
+    scoreEl.textContent = score;
+    if (score > highScore) {
+      highScore = score;
+      highEl.textContent = highScore;
+      localStorage.setItem('neonSnakeHigh', highScore);
+    }
+    randomFood();
+  } else {
+    snake.pop();
+  }
+}
+
+function gameOver() {
+  gameRunning = false;
+  clearInterval(gameLoop);
+  finalScoreEl.textContent = score;
+  gameOverEl.style.display = 'block';
+}
+
+function restartGame() {
+  snake = [{x: 10, y: 10}];
+  dx = 0; dy = 0;
+  score = 0;
+  scoreEl.textContent = 0;
+  gameRunning = true;
+  gameOverEl.style.display = 'none';
+  randomFood();
+  clearInterval(gameLoop);
+  gameLoop = setInterval(gameTick, 100);
+}
+
+function gameTick() {
+  move();
+  draw();
+}
+
+document.addEventListener('keydown', (e) => {
+  if (!gameRunning && e.key === ' ') restartGame();
+  switch(e.key) {
+    case 'ArrowUp': case 'w': case 'W':
+      if (dy === 0) { dx = 0; dy = -1; }
+      break;
+    case 'ArrowDown': case 's': case 'S':
+      if (dy === 0) { dx = 0; dy = 1; }
+      break;
+    case 'ArrowLeft': case 'a': case 'A':
+      if (dx === 0) { dx = -1; dy = 0; }
+      break;
+    case 'ArrowRight': case 'd': case 'D':
+      if (dx === 0) { dx = 1; dy = 0; }
+      break;
+  }
+});
+
+randomFood();
+draw();
+gameLoop = setInterval(gameTick, 100);
+</script>
+</body>
+</html>
